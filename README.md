@@ -166,7 +166,7 @@ localhost:8085/zuowen
 
 |模型 | 共享地址 |模型描述|
 |---------|--------|--------|
-|zuowen_epoch40 | [百度网盘【提取码:803v】](https://pan.baidu.com/s/1nwyqQ6WyE0mE0U6OVlThEQ) |使用26w篇中文作文语料训练了40个epoch，loss降到2.1左右，单词预测准确率大约为54%|
+|zuowen_epoch40 | [百度网盘【提取码:8o3v】](https://pan.baidu.com/s/1nwyqQ6WyE0mE0U6OVlThEQ) |使用26w篇中文作文语料训练了40个epoch，loss降到2.1左右，单词预测准确率大约为54%|
 
 ## Future Work
 - 使用3张1080Ti进行训练，由于显卡资源有限，在数据预处理时，使用了大小为200的滑动窗口对数据进行截断，batch_size设为50。没有充分使用模型1024的最大输入长度，导致训练不够充分。若有充足的显卡资源，可以使用1024的滑动窗口对数据进行截断，提高模型的生成效果。
