@@ -136,7 +136,7 @@ python generate.py --device 0 --max_len 200 --title 家乡的四季 --context �
 ### Http服务
 将模型生成能力封装成Http服务，支持Post与Get请求。运行如下命令，启动服务。
 ```
-python http_service.py --port 8085 --model_path model/zuowen_epoch40 
+python http_service.py --port 8085 --model_path model/zuowen_epoch40 --context_len 200 
 ```
 Get请求：
 ```
