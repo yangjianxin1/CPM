@@ -35,7 +35,7 @@ def generate(max_len):
     input_ids = torch.tensor([input_ids], dtype=torch.long, device=device)
 
     while True:
-        next_token_id = generate_next_token(input_ids)
+        next_token_id = generate_next_token(input_ids[:, -args.context_len:])
         input_ids = torch.cat((input_ids, next_token_id.unsqueeze(0)), dim=1)
         cur_len += 1
         word = tokenizer.convert_ids_to_tokens(next_token_id.item())
@@ -62,7 +62,8 @@ if __name__ == '__main__':
     parser.add_argument('--topk', default=0, type=int, required=False, help='最高几选一')
     parser.add_argument('--topp', default=0.85, type=float, required=False, help='最高积累概率')
     parser.add_argument('--repetition_penalty', default=1.0, type=float, required=False, help='重复惩罚参数')
-    parser.add_argument('--max_len', default=200, type=int, required=False, help='生成的最长长度')
+    parser.add_argument('--context_len', default=200, type=int, required=False, help='每一步生成时，参考的上文的长度')
+    parser.add_argument('--max_len', default=300, type=int, required=False, help='生成的最长长度')
     parser.add_argument('--log_path', default='log/generate.log', type=str, required=False, help='日志存放位置')
     parser.add_argument('--no_cuda', action='store_true', help='不使用GPU进行预测')
     parser.add_argument('--model_path', type=str, default='model/zuowen_epoch40', help='模型存放位置')

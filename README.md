@@ -131,6 +131,7 @@ python generate.py --device 0 --max_len 200 --title 家乡的四季 --context �
 - model_path：模型存放路径
 - title：作文标题
 - context：作文上文
+- context_len：每一步生成时，参考的上文的长度
 
 ### Http服务
 将模型生成能力封装成Http服务，支持Post与Get请求。运行如下命令，启动服务。
@@ -160,6 +161,7 @@ localhost:8085/zuowen
 - log_path：生成日志存放位置
 - no_cuda：设为True时，不使用GPU
 - model_path：模型存放路径
+- context_len：每一步生成时，参考的上文的长度
 
 
 <h2 id="model_share">模型分享</h2>

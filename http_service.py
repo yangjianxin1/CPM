@@ -15,6 +15,8 @@ def generate_next_token(input_ids):
     """
     对于给定的上文，生成下一个单词
     """
+    # 只根据当前位置的前context_len个token进行生成
+    input_ids = input_ids[:, -args.context_len:]
     outputs = model(input_ids=input_ids)
     logits = outputs.logits
     # next_token_logits表示最后一个token的hidden_state对应的prediction_scores,也就是模型要预测的下一个token的概率
@@ -79,6 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('--temperature', default=1, type=float, required=False, help='生成温度')
     parser.add_argument('--topk', default=0, type=int, required=False, help='最高几选一')
     parser.add_argument('--topp', default=0.85, type=float, required=False, help='最高积累概率')
+    parser.add_argument('--context_len', default=200, type=int, required=False, help='作文生成中，每一步生成时，参考的上文的长度')
     # parser.add_argument('--repetition_penalty', default=1.0, type=float, required=False, help='重复惩罚参数')
     parser.add_argument('--port', type=int, default=8085, help='服务绑定的端口号')
     parser.add_argument('--log_path', default='log/http_service.log', type=str, required=False, help='日志存放位置')
