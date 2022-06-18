@@ -23,6 +23,7 @@ import pandas as pd
 import torch.nn.utils.rnn as rnn_utils
 import numpy as np
 from dataset import CPMDataset
+from torch.utils.tensorboard import SummaryWriter
 
 
 def set_args():
@@ -41,7 +42,7 @@ def set_args():
     parser.add_argument('--epochs', default=100, type=int, required=False, help='训练的最大轮次')
     parser.add_argument('--batch_size', default=16, type=int, required=False, help='训练的batch size')
     parser.add_argument('--gpu0_bsz', default=6, type=int, required=False, help='0号卡的batch size')
-    parser.add_argument('--lr', default=1.5e-4, type=float, required=False, help='学习率')
+    parser.add_argument('--lr', default=1e-5, type=float, required=False, help='学习率')
     parser.add_argument('--eps', default=1.0e-09, type=float, required=False, help='AdamW优化器的衰减率')
     parser.add_argument('--log_step', default=1, type=int, required=False, help='多少步汇报一次loss')
     parser.add_argument('--gradient_accumulation_steps', default=6, type=int, required=False, help='梯度积累的步数')
@@ -77,13 +78,13 @@ def load_dataset(logger, args):
 
     # test
     # train_list = train_list[:24]
-
+    logger.info('len of train data:{}'.format(len(train_list)))
     train_dataset = CPMDataset(train_list, args.max_len)
 
     return train_dataset
 
 
-def train_epoch(model, train_dataloader, optimizer, scheduler, logger,
+def train_epoch(model, train_dataloader, optimizer, scheduler, logger, writer,
                 epoch, args):
     model.train()
     device = args.device
@@ -133,6 +134,9 @@ def train_epoch(model, train_dataloader, optimizer, scheduler, logger,
                 logger.info(
                     "batch {} of epoch {}, loss {}, batch_acc {}, lr {}".format(
                         batch_idx + 1, epoch + 1, loss.item() * args.gradient_accumulation_steps, batch_acc, scheduler.get_lr()))
+                step = epoch * len(train_dataloader) + batch_idx
+                writer.add_scalar('train loss', loss.item()*args.gradient_accumulation_steps, step)
+                writer.add_scalar('train acc', batch_acc, step)
 
             del input_ids, outputs
 
@@ -165,7 +169,7 @@ def train_epoch(model, train_dataloader, optimizer, scheduler, logger,
     return epoch_mean_loss
 
 
-def train(model, logger, train_dataset, args):
+def train(model, logger, train_dataset, writer, args):
     train_dataloader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=collate_fn,
         drop_last=True
@@ -184,7 +188,7 @@ def train(model, logger, train_dataset, args):
         train_loss = train_epoch(
             model=model, train_dataloader=train_dataloader,
             optimizer=optimizer, scheduler=scheduler,
-            logger=logger, epoch=epoch, args=args)
+            logger=logger, writer=writer, epoch=epoch, args=args)
         train_losses.append(round(train_loss, 4))
         logger.info("train loss list:{}".format(train_losses))
 
@@ -243,6 +247,8 @@ def main():
 
     # 创建日志对象
     logger = set_logger(args.log_path)
+    # 初始化tensorboard
+    writer = SummaryWriter(args.output_path)
     # 当用户使用GPU,并且GPU可用时
     args.cuda = torch.cuda.is_available() and not args.no_cuda
     device = 'cuda:0' if args.cuda else 'cpu'
@@ -253,7 +259,7 @@ def main():
     set_random_seed(args.seed, args.cuda)
 
     # 初始化tokenizer
-    tokenizer = CpmTokenizer(vocab_file="vocab/chinese_vocab.model")
+    tokenizer = CpmTokenizer(vocab_file=args.vocab_path)
     args.eod_id = tokenizer.convert_tokens_to_ids("<eod>")  # 文档结束符
     args.pad_id = tokenizer.pad_token_id
 
@@ -291,7 +297,7 @@ def main():
     # ========= Loading Dataset ========= #
     train_dataset = load_dataset(logger, args)
 
-    train(model, logger, train_dataset, args)
+    train(model, logger, train_dataset, writer, args)
 
 
 if __name__ == '__main__':
