@@ -1,0 +1,18 @@
+python distill.py \
+    --device_ids 3 \
+    --output_path output/distill \
+    --vocab_path vocab/chinese_vocab.model \
+    --teacher_checkpoint model/zuowen_epoch40 \
+    --student_config_path config/cpm-one-layer.json \
+    --train_path data/train.pkl \
+    --max_len 200 \
+    --ignore_index -100 \
+    --lr 1e-4 \
+    --eps 1.0e-09 \
+    --epochs 40 \
+    --batch_size 128 \
+    --save_step 5000 \
+    --log_step 50 \
+    --gradient_accumulation_steps 1 \
+    --seed 42 \
+    --warmup_steps 4000
