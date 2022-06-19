@@ -3,14 +3,11 @@ import math
 import time
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
-import logging
+from loguru import logger
 from datetime import datetime
 import os
 from torch.utils.data import Dataset, DataLoader
 from os.path import join, exists
-from torch.nn import CrossEntropyLoss
-from tqdm import tqdm
 from torch.nn import DataParallel
 import transformers
 import pickle
@@ -18,7 +15,7 @@ import sys
 from utils import set_logger, set_random_seed
 from sklearn.model_selection import train_test_split
 from data_parallel import BalancedDataParallel
-from transformers import GPT2LMHeadModel, GPT2Config, CpmTokenizer
+from transformers import GPT2LMHeadModel, GPT2Config
 import pandas as pd
 import torch.nn.utils.rnn as rnn_utils
 import numpy as np
@@ -37,9 +34,8 @@ def set_args():
     parser.add_argument('--train_path', default='data/train.pkl', type=str, required=False, help='经过预处理之后的数据存放路径')
     parser.add_argument('--max_len', default=200, type=int, required=False, help='训练时，输入数据的最大长度')
 
-    parser.add_argument('--log_path', default='log/train.log', type=str, required=False, help='训练日志存放位置')
     parser.add_argument('--ignore_index', default=-100, type=int, required=False, help='对于ignore_index的label token不计算梯度')
-    parser.add_argument('--epochs', default=100, type=int, required=False, help='训练的最大轮次')
+    parser.add_argument('--epochs', default=40, type=int, required=False, help='训练的最大轮次')
     parser.add_argument('--batch_size', default=16, type=int, required=False, help='训练的batch size')
     parser.add_argument('--gpu0_bsz', default=6, type=int, required=False, help='0号卡的batch size')
     parser.add_argument('--lr', default=1e-5, type=float, required=False, help='学习率')
@@ -47,15 +43,13 @@ def set_args():
     parser.add_argument('--log_step', default=1, type=int, required=False, help='多少步汇报一次loss')
     parser.add_argument('--gradient_accumulation_steps', default=6, type=int, required=False, help='梯度积累的步数')
     parser.add_argument('--max_grad_norm', default=1.0, type=float, required=False)
-    parser.add_argument('--save_model_path', default='model', type=str, required=False,
+    parser.add_argument('--output_path', default='output/train', type=str, required=False,
                         help='模型输出路径')
     parser.add_argument('--pretrained_model', default='model/zuowen_epoch40', type=str, required=False,
                         help='预训练的模型的路径')
     parser.add_argument('--seed', type=int, default=1234, help='设置随机种子')
     parser.add_argument('--num_workers', type=int, default=0, help="dataloader加载数据时使用的线程数量")
-    # parser.add_argument('--patience', type=int, default=0, help="用于early stopping,设为0时,不进行early stopping.early stop得到的模型的生成效果不一定会更好。")
     parser.add_argument('--warmup_steps', type=int, default=4000, help='warm up步数')
-    # parser.add_argument('--label_smoothing', default=True, action='store_true', help='是否进行标签平滑')
     args = parser.parse_args()
     return args
 
@@ -132,8 +126,8 @@ def train_epoch(model, train_dataloader, optimizer, scheduler, logger, writer,
 
             if (batch_idx + 1) % args.log_step == 0:
                 logger.info(
-                    "batch {} of epoch {}, loss {}, batch_acc {}, lr {}".format(
-                        batch_idx + 1, epoch + 1, loss.item() * args.gradient_accumulation_steps, batch_acc, scheduler.get_lr()))
+                    "batch {} of epoch {}, step {}, loss {}, batch_acc {}, lr {}".format(
+                        batch_idx + 1, epoch + 1, step, loss.item() * args.gradient_accumulation_steps, batch_acc, scheduler.get_lr()))
                 step = epoch * len(train_dataloader) + batch_idx
                 writer.add_scalar('train loss', loss.item()*args.gradient_accumulation_steps, step)
                 writer.add_scalar('train acc', batch_acc, step)
@@ -157,7 +151,7 @@ def train_epoch(model, train_dataloader, optimizer, scheduler, logger, writer,
 
     # save model
     logger.info('saving model for epoch {}'.format(epoch + 1))
-    model_path = join(args.save_model_path, 'epoch{}'.format(epoch + 1))
+    model_path = join(args.output_path, 'epoch{}'.format(epoch + 1))
     if not os.path.exists(model_path):
         os.mkdir(model_path)
     model_to_save = model.module if hasattr(model, 'module') else model
@@ -196,29 +190,6 @@ def train(model, logger, train_dataset, writer, args):
     logger.info("train_losses:{}".format(train_losses))
 
 
-def caculate_loss(logit, target, pad_idx, smoothing=True):
-    if smoothing:
-        logit = logit[..., :-1, :].contiguous().view(-1, logit.size(2))
-        target = target[..., 1:].contiguous().view(-1)
-
-        eps = 0.1
-        n_class = logit.size(-1)
-
-        one_hot = torch.zeros_like(logit).scatter(1, target.view(-1, 1), 1)
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-        log_prb = F.log_softmax(logit, dim=1)
-
-        non_pad_mask = target.ne(pad_idx)
-        loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).mean()  # average later
-    else:
-        # loss = F.cross_entropy(predict_logit, target, ignore_index=pad_idx)
-        logit = logit[..., :-1, :].contiguous().view(-1, logit.size(-1))
-        labels = target[..., 1:].contiguous().view(-1)
-        loss = F.cross_entropy(logit, labels, ignore_index=pad_idx)
-    return loss
-
-
 def calculate_acc(logit, labels, ignore_index=-100):
     logit = logit[..., :-1, :].contiguous().view(-1, logit.size(-1))
     labels = labels[..., 1:].contiguous().view(-1)
@@ -246,7 +217,8 @@ def main():
     #           'the warmup stage ends with only little data trained.')
 
     # 创建日志对象
-    logger = set_logger(args.log_path)
+    cur_time = time.strftime("%Y%m%d%H%M%S", time.localtime())
+    logger.add(join(args.output_path, 'train-{}.log'.format(cur_time)))
     # 初始化tensorboard
     writer = SummaryWriter(args.output_path)
     # 当用户使用GPU,并且GPU可用时
@@ -259,13 +231,13 @@ def main():
     set_random_seed(args.seed, args.cuda)
 
     # 初始化tokenizer
-    tokenizer = CpmTokenizer(vocab_file=args.vocab_path)
-    args.eod_id = tokenizer.convert_tokens_to_ids("<eod>")  # 文档结束符
-    args.pad_id = tokenizer.pad_token_id
+    # tokenizer = CpmTokenizer(vocab_file=args.vocab_path)
+    # args.eod_id = tokenizer.convert_tokens_to_ids("<eod>")  # 文档结束符
+    # args.pad_id = tokenizer.pad_token_id
 
     # 创建模型的输出目录
-    if not os.path.exists(args.save_model_path):
-        os.mkdir(args.save_model_path)
+    if not os.path.exists(args.output_path):
+        os.mkdir(args.output_path)
 
     # 创建模型
     if args.pretrained_model:  # 加载预训练模型
@@ -275,7 +247,7 @@ def main():
         model = GPT2LMHeadModel(config=model_config)
     model = model.to(device)
     logger.info('model config:\n{}'.format(model.config.to_json_string()))
-    assert model.config.vocab_size == tokenizer.vocab_size
+    # assert model.config.vocab_size == tokenizer.vocab_size
 
     # 多卡并行训练模型
     if args.cuda and torch.cuda.device_count() > 1:
@@ -288,7 +260,7 @@ def main():
     parameters = model.parameters()
     for parameter in parameters:
         num_parameters += parameter.numel()
-    logger.info('number of model parameters: {}'.format(num_parameters))
+    logger.info("Number of teacher parameter: %.2fM" % (num_parameters / 1e6))
 
     # 记录参数设置
     logger.info("args:{}".format(args))
