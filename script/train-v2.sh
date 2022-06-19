@@ -1,0 +1,18 @@
+python train-v2.py \
+    --device_ids 0 \
+    --vocab_path vocab/chinese_vocab.model \
+    --model_config config/cpm-one-layer.json \
+    --train_path data/train.pkl \
+    --max_len 200 \
+    --ignore_index -100 \
+    --epochs 40 \
+    --batch_size 64 \
+    --lr 1e-4 \
+    --eps 1.0e-09 \
+    --log_step 50 \
+    --save_step 5000 \
+    --gradient_accumulation_steps 1 \
+    --output_path output/train \
+    --pretrained_model '' \
+    --seed 42 \
+    --warmup_steps 4000
