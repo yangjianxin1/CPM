@@ -83,6 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('--topp', default=0.85, type=float, required=False, help='最高积累概率')
     parser.add_argument('--context_len', default=200, type=int, required=False, help='作文生成中，每一步生成时，参考的上文的长度')
     # parser.add_argument('--repetition_penalty', default=1.0, type=float, required=False, help='重复惩罚参数')
+    parser.add_argument('--host', default='127.0.0.1', help='服务绑定地址，默认仅允许本机访问')
     parser.add_argument('--port', type=int, default=8085, help='服务绑定的端口号')
     parser.add_argument('--log_path', default='log/http_service.log', type=str, required=False, help='日志存放位置')
     parser.add_argument('--no_cuda', action='store_true', help='不使用GPU进行预测')
@@ -108,4 +109,4 @@ if __name__ == '__main__':
     model.eval()
     model = model.to(device)
 
-    app.run(debug=True, host="0.0.0.0", port=args.port)
+    app.run(debug=False, host=args.host, port=args.port, use_debugger=False, use_reloader=False)

@@ -140,6 +140,8 @@ python generate.py --device 0 --max_len 200 --title 家乡的四季 --context �
 ```
 python http_service.py --port 8085 --model_path model/zuowen_epoch40 --context_len 200 
 ```
+默认仅绑定 `127.0.0.1`，并禁用交互式调试器和自动重载。仅在可信网络中需要远程访问时，显式传入 `--host 0.0.0.0`；这不是生产部署方案。不要把 Flask 开发服务器直接暴露到公网，生产部署应使用经过维护的 WSGI 服务器、鉴权和反向代理。此变更不代表旧版运行环境或依赖已完成安全升级。
+
 Get请求：
 ```
 http://localhost:8085/zuowen?title="家乡的四季"&context="家乡的四季,最美不过了"&max_len=200
